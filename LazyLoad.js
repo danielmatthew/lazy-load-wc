@@ -1,10 +1,16 @@
 import { LitElement, html } from 'lit-element';
 
+const isIntersecting = ({ isIntersecting }) => isIntersecting;
+
 export default class LazyLoad extends LitElement {
   static get properties() {
     return {
       source: { type: String },
-      text: { type: String },
+      alt: { type: String },
+      loaded: {
+        type: Boolean,
+        reflect: true,
+      },
     };
   }
 
@@ -12,45 +18,53 @@ export default class LazyLoad extends LitElement {
     return Array.from(this.shadowRoot.children).find(el => el.nodeName === 'FIGURE');
   }
 
+  constructor() {
+    super();
+    this.handleIntersect = this.handleIntersect.bind(this);
+    this.loaded = false;
+    this.isIntersecting = false;
+  }
+
   connectedCallback() {
     super.connectedCallback();
 
-    const loadImage = () => {
-      const imageElement = Array.from(this.imgWrapper.children).find(el => el.nodeName === 'IMG');
+    this.setAttribute('role', 'presentation');
+    this.initIntersectionObserver();
+  }
 
-      if (imageElement) {
-        imageElement.addEventListener('load', () => {
-          setTimeout(() => this.imgWrapper.classList.add('loaded'), 100);
-        });
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.disconnectObserver();
+  }
 
-        imageElement.addEventListener('error', () => console.log('error'));
-      }
-    };
+  handleIntersect(entries) {
+    if (entries.some(isIntersecting)) {
+      this.intersecting = true;
+    }
+  }
 
-    const handleIntersect = (entries, observer) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          loadImage();
-          observer.unobserve(this);
-        }
-      });
-    };
+  onLoad() {
+    this.loaded = true;
+  }
 
-    const createObserver = () => {
+  initIntersectionObserver() {
+    if (window.IntersectionObserver) {
       const options = {
         root: null,
         threshold: '0',
       };
 
-      const observer = new IntersectionObserver(handleIntersect, options);
+      const observer = new IntersectionObserver(this.handleIntersect, options);
       observer.observe(this);
-    };
-
-    if (window.IntersectionObserver) {
-      createObserver();
     } else {
-      loadImage();
+      this.loadImage();
     }
+  }
+
+  disconnectObserver() {
+    this.observer.disconnect();
+    this.observer = null;
+    delete this.observer;
   }
 
   render() {
@@ -86,8 +100,8 @@ export default class LazyLoad extends LitElement {
           visibility: hidden;
         }
       </style>
-      <figure class="image__wrapper">
-        <img class="image__item" src="${this.source}" alt="${this.text}" />
+      <figure class="image__wrapper ${this.intersecting ? 'loaded' : ''}">
+        <img class="image__item" src="${this.source}" alt="${this.alt}" @load="${this.onLoad}" />
       </figure>
     `;
   }
